@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="logo.png" />
+    <title>AI Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://code.iconify.design/3/3.1.0/iconify.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      .message-row.user .message-bubble {
+        border-bottom-right-radius: 4px;
+      }
+      .message-row.bot .message-bubble {
+        border-bottom-left-radius: 4px;
+      }
+    </style>
+  </head>
+  <body
+    class="p-4 md:p-0 bg-white-500 flex justify-center items-center min-h-screen"
+  >
+    <div
+      class="w-full max-w-4xl h-130 rounded-2xl shadow-xl/30 flex flex-col overflow-hidden"
+    >
+      <div class="flex items-center justify-center gap-4 py-2">
+        <img src="logo.png" class="h-12 w-12" />
+        <h2
+          class="text-center font-semibold text-lg bg-gradient-to-r from-[#89BCFF] to-[#FF86E1] bg-clip-text text-transparent"
+        >
+          Merhaba! Özetlemek istediğin bir dosyan mı var?
+        </h2>
+      </div>
+
+      <div
+        id="chat"
+        class="flex-1 text-gray-700 py-4 px-5 overflow-y-auto bg-[radial-gradient(at_50%_100%,_#d6e5ff_10%,_#f5c1df_20%,_white_60%)]"
+      ></div>
+
+      <div
+        class="relative px-4 flex gap-2.5 rounded-2xl shadow-xl/30 border border-gray-200"
+      >
+        <div class="flex items-center gap-2.5">
+          <label
+            for="pdfInput"
+            class="py-1.5 px-2.5 rounded-full border border-dashed border-gray-400 cursor-pointer bg-white text-xs hover:border-[#1d3f72]"
+            ><span
+              class="iconify text-gray-500 hover:scale-125 cursor-pointer transition-transform"
+              data-icon="akar-icons:attach"
+              data-width="20"
+              data-height="20"
+              >PDF Seç</span
+            ></label
+          >
+          <span id="pdfName" class="absolute -top-5 text-xs text-gray-500"
+            >PDF seçilmedi</span
+          >
+          <input
+            type="file"
+            id="pdfInput"
+            accept="application/pdf"
+            class="hidden"
+          />
+        </div>
+        <textarea
+          id="messageInput"
+          class="w-full rounded-lg px-2.5 pt-5 focus:outline-none focus:ring-0"
+          placeholder="Dosyanı yükle, anında özetini al, quiz hazırla."
+        ></textarea>
+        <button
+          id="sendBtn"
+          class="text-white border-none rounded-lg cursor-pointer flex items-center justify-center disabled:opacity-70 disabled:cursor-default"
+        >
+          <span
+            class="iconify hover:scale-120"
+            data-icon="fluent-color:send-16"
+            data-width="30"
+          ></span>
+        </button>
+      </div>
+    </div>
+
+    <script>
+      const chatEl = document.getElementById("chat");
+      const messageInput = document.getElementById("messageInput");
+      const sendBtn = document.getElementById("sendBtn");
+      const pdfInput = document.getElementById("pdfInput");
+      const pdfNameEl = document.getElementById("pdfName");
+
+      let isSending = false;
+      let storedPdfFile = null;
+
+      // Quiz state
+      let awaitingUsername = false;
+      let lastScore = null;
+      let lastAnswers = null;
+      let lastCorrectAnswers = null;
+
+      function addMessage(text, sender = "bot") {
+        if (!text) return;
+        const row = document.createElement("div");
+
+        // Tailwind sınıflarını buraya ekledik: flex mb-2.5, ve justify-end/start
+        row.className = `flex mb-2.5 message-row ${
+          sender === "user" ? "justify-end" : "justify-start"
+        }`;
+
+        const bubble = document.createElement("div");
+
+        // Tailwind sınıflarını buraya ekledik: max-w-[70%] py-2.5 px-3.5 rounded-xl text-sm whitespace-pre-wrap
+        // ve user/bot'a özel arka plan ve köşe yuvarlatma sınıfları
+        let bubbleClasses =
+          "max-w-[70%] py-2.5 px-3.5 rounded-xl text-sm whitespace-pre-wrap ";
+        if (sender === "user") {
+          bubbleClasses += "bg-[#fe93e4] rounded-br-sm"; // .user .message-bubble
+        } else {
+          bubbleClasses += "bg-[#98C3FF] rounded-bl-sm"; // .bot .message-bubble
+        }
+
+        bubble.className = bubbleClasses + " message-bubble";
+        bubble.textContent = text;
+
+        row.appendChild(bubble);
+        chatEl.appendChild(row);
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }
+
+      pdfInput.addEventListener("change", () => {
+        const file = pdfInput.files[0];
+        if (file) {
+          storedPdfFile = file;
+          pdfNameEl.textContent = file.name;
+        } else {
+          storedPdfFile = null;
+          pdfNameEl.textContent = "PDF seçilmedi";
+        }
+      });
+
+      async function sendMessage() {
+        if (isSending) return;
+
+        const text = messageInput.value.trim();
+        const file = storedPdfFile;
+
+        if (!text && !file) {
+          addMessage("Lütfen mesaj yazın veya PDF seçin.", "bot");
+          return;
+        }
+
+        if (text) addMessage(text, "user");
+        messageInput.value = "";
+
+        const formData = new FormData();
+        formData.append("userMessage", text);
+
+        if (file) {
+          formData.append("pdfFile", file);
+        }
+
+        // correct_answers gönder
+        if (lastCorrectAnswers) {
+          formData.append(
+            "correct_answers",
+            JSON.stringify(lastCorrectAnswers)
+          );
+        }
+
+        // isim kaydetme modunda gerekli alanları gönder
+        if (awaitingUsername) {
+          formData.append("mode", "saveScore");
+          formData.append("username", text);
+
+          if (lastScore !== null) {
+            formData.append("score", String(lastScore));
+          }
+          if (lastAnswers !== null) {
+            formData.append("answers", JSON.stringify(lastAnswers));
+          }
+        }
+
+        isSending = true;
+        sendBtn.disabled = true;
+
+        try {
+          const response = await fetch(
+            "http://localhost:5678/webhook/pdf-agent",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+          const raw = await response.text();
+          let data;
+          try {
+            data = JSON.parse(raw);
+          } catch (e) {
+            console.error("JSON parse error:", e, raw);
+            addMessage("Sunucudan beklenmeyen bir yanıt geldi.", "bot");
+            return;
+          }
+
+          // Gelen metni göster
+          if (data.reply) {
+            addMessage(data.reply, "bot");
+          }
+
+          // correct_answers geldiyse sakla
+          if (data.correct_answers) {
+            lastCorrectAnswers = data.correct_answers;
+          }
+
+          // Quiz state güncellemesi
+          if (data.score === null) {
+            lastScore = null;
+            lastAnswers = null;
+            awaitingUsername = false;
+          } else {
+            lastScore = data.score;
+            lastAnswers = data.answers || null;
+            awaitingUsername =
+              data.username === null && data.save_score === false;
+          }
+        } catch (err) {
+          console.error("Fetch error:", err);
+          addMessage("⚠ Sunucuya ulaşılamadı.", "bot");
+        } finally {
+          isSending = false;
+          sendBtn.disabled = false;
+        }
+      }
+
+      sendBtn.addEventListener("click", sendMessage);
+
+      messageInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+    </script>
+  </body>
+</html>

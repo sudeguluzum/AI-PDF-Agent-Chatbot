@@ -1,0 +1,701 @@
+{
+  "name": "PDFAgent-Revize-7",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pdf-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -480,
+        16
+      ],
+      "id": "795e282e-3e13-416f-bc31-9fe72ad876d7",
+      "name": "Webhook",
+      "webhookId": "fbf69da6-6a2e-4ec3-8802-00f731a6c285"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "56fceffd-901e-416c-8a50-82a8a455ffb8",
+              "leftValue": "={{$binary.pdfFile}}",
+              "rightValue": "TRUE",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        112,
+        192
+      ],
+      "id": "5a61d802-c38f-4b61-b719-1bdd58f7fae0",
+      "name": "Has PDF?"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "pdfFile",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        384,
+        128
+      ],
+      "id": "e5aa52b1-d27e-413a-9fcc-f8e2bea17086",
+      "name": "Extract PDF"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1fbffcfe-b480-46c6-8745-a48db72d078a",
+              "name": "pdfText",
+              "value": "=={{ $json.data?.text || $json.text || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "d64bebeb-da06-4116-8853-6373e173c5a0",
+              "name": "userMessage",
+              "value": "={{ $node['Webhook'].json.body.userMessage }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        576,
+        128
+      ],
+      "id": "51071336-357a-4ede-94b7-bd1e6620edb4",
+      "name": "Set PDF Text With File"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "067db55d-2a05-458f-a73b-6d1ee46f1fd2",
+              "name": "pdfText",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "aa5a0c5a-d0ca-4dbf-b510-f8eca96191a5",
+              "name": "userMessage",
+              "value": "={{ $json.userMessage || $item(0).$node[\"Webhook\"].json.body.userMessage }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        480,
+        320
+      ],
+      "id": "a6c35303-81ac-4ec9-9c1b-8f392be1f43f",
+      "name": "Set Empty PDF"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        784,
+        352
+      ],
+      "id": "c17da434-cbbb-439e-b322-5d46bc84c0a4",
+      "name": "Merge Inputs"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=PDF_CONTENT_START\n{{ $json.pdfText }}\nPDF_CONTENT_END\n\nUSER_MESSAGE_START\n{{ $json.userMessage }}\nUSER_MESSAGE_END\n\nSYSTEM: You MUST return ONLY JSON. No explanations, no natural language, no markdown.\n\n======================================================================\nQUIZ ANSWER DETECTION & NORMALIZATION\n======================================================================\n\nIf the userMessage appears to be quiz answers (even if messy, irregular, or partially incorrect format), you MUST:\n\n1. Detect all letters A–E or a–e in the message.\n2. Detect number:letter pairs (1:a, 2:b, etc.) if they exist.\n3. Remove all invalid characters (anything other than A–E, a–e, digits 1–5).\n4. Normalize all letters to lowercase.\n5. Build exactly 5 answers:\n   - If number:letter pairs exist → map them directly (1→answer1, 2→answer2…).\n   - If letters only → first letter = answer1, second letter = answer2, etc.\n   - If fewer than 5 answers found → fill missing ones with null.\n   - If more than 5 letters detected → take the first 5 valid letters.\n\nIf the message is detected as quiz answers, RETURN:\n\n{\n  \"reply\": null,\n  \"save_score\": false,\n  \"score\": null,\n  \"answers\": {\n      \"1\": \"a|b|c|d|e|null\",\n      \"2\": \"a|b|c|d|e|null\",\n      \"3\": \"a|b|c|d|e|null\",\n      \"4\": \"a|b|c|d|e|null\",\n      \"5\": \"a|b|c|d|e|null\"\n  },\n  \"correct_answers\": null\n}\n\nAbsolutely NO scoring. NO commentary. NO PDF logic in this branch.\n\n======================================================================\nQUIZ GENERATION MODE\n======================================================================\n\nIf the user requests a quiz:\n\n1. Generate a 5-question A–E multiple-choice quiz (human-readable, NOT JSON).\n2. ALSO return the correct answers inside \"correct_answers\".\n3. The human-readable quiz text MUST include this instruction:\n\n\"Kullanıcı cevapları şu formatlardan herhangi biriyle yazabilir:\n- A B C D E\n- ABCDE\n- a,b,c,d,e\n- 1:a 2:b 3:c 4:d 5:e\nHer format kabul edilir. Harfler büyük/küçük fark etmez.\"\n\nReturn JSON:\n\n{\n \"reply\": \"human readable quiz text\",\n \"save_score\": false,\n \"score\": null,\n \"answers\": null,\n \"correct_answers\": {\n     \"1\": \"a\",\n     \"2\": \"e\",\n     \"3\": \"c\",\n     \"4\": \"b\",\n     \"5\": \"d\"\n }\n}\n\n======================================================================\nPDF PRESENCE CHECK (CRITICAL)\n======================================================================\n\nIf pdfText is empty, missing, or unavailable:\nUser CANNOT:\n- request summary\n- ask questions about the PDF\n- request quiz\n\nYou MUST return:\n\n{\n  \"reply\": \"Lütfen önce PDF yükleyin.\",\n  \"save_score\": false,\n  \"score\": null,\n  \"answers\": null,\n  \"correct_answers\": null\n}\n\nNo quiz, no summary, no explanation.\n\n======================================================================\nPDF QUESTIONS & SUMMARIES\n======================================================================\n\nIf user asks normal questions (not quiz) → Answer ONLY using pdfText.\n\nReturn JSON:\n\n{\n \"reply\": \"your answer\",\n \"save_score\": false,\n \"score\": null,\n \"answers\": null,\n \"correct_answers\": null\n}\n\n\nOUTPUT FORMAT (ALWAYS)\n======================================================================\n\nYou MUST always return:\n\n{\n \"reply\": \"...\",\n \"save_score\": true/false,\n \"score\": number or null,\n \"answers\": object or null,\n \"correct_answers\": object or null\n}\n\nIMPORTANT:\n- ONLY JSON\n- NO markdown\n- NO text outside JSON\n- NO scoring (scoring is done by backend)\n",
+        "options": {
+          "systemMessage": "Only output JSON. Do not output explanations."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        448
+      ],
+      "id": "ee914735-6c31-47b7-a24c-d028d5d218ed",
+      "name": "PDF AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        912,
+        688
+      ],
+      "id": "55e4af7f-c51f-483a-85c8-6cb5f63552c4",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "PfwNXm0BmyuMVnNQ",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a0ca05c9-e7c2-46d5-8da6-9019be8c38a0",
+              "name": "reply",
+              "value": "={{ JSON.parse(($json.output || \"{}\").replace(/```json|```/g, \"\").trim()).reply }}",
+              "type": "string"
+            },
+            {
+              "id": "2ee030b1-7008-4798-a644-ddbc5a16d7a3",
+              "name": "score",
+              "value": "={{ JSON.parse(($json.output || \"{}\").replace(/```json|```/g, \"\").trim()).score }}",
+              "type": "number"
+            },
+            {
+              "id": "3db60ea5-6f52-4e21-b7f9-2f356d4e29db",
+              "name": "save_score",
+              "value": "={{ JSON.parse(($json.output || \"{}\").replace(/```json|```/g, \"\").trim()).save_score }}",
+              "type": "boolean"
+            },
+            {
+              "id": "b57b238c-49b4-42c2-9b02-2c66d19eb70a",
+              "name": "answers",
+              "value": "={{ JSON.parse(($json.output || \"{}\").replace(/```json|```/g, \"\").trim()).answers }}",
+              "type": "object"
+            },
+            {
+              "id": "d62afa49-236c-41e1-802c-2a70d86861f4",
+              "name": "correct_answers",
+              "value": "={{ JSON.parse(($json.output || \"{}\").replace(/```json|```/g, \"\").trim()).correct_answers }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1264,
+        448
+      ],
+      "id": "9fda8517-a9d2-4fee-9f5c-7aa35aa07d01",
+      "name": "Parse AI JSON"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9b3f9937-2145-4a98-a3f6-cc8742c28e09",
+              "leftValue": "={{ $json.save_score }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1824,
+        352
+      ],
+      "id": "95c31e3d-bd1e-4b35-ab14-30dd74fa087f",
+      "name": "Should Save?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2224,
+        352
+      ],
+      "id": "3cc5b8ac-0cb2-4d76-92c8-2407b4ddbea5",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify($json) }}\n\n{{ is }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2416,
+        560
+      ],
+      "id": "7677fe17-5ed2-417f-b81b-7265bf5be826",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cfea667d-6a48-4529-8c2c-76e508a6993b",
+              "leftValue": "={{$json.mode}}",
+              "rightValue": "saveScore",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -80,
+        16
+      ],
+      "id": "456c7212-c723-4d97-b999-1733f4b0e65a",
+      "name": "Is Save Request?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Kullanıcının verdiği cevaplar (AI'den gelen)\nconst userAnswers = $json.answers || {};\n\n// 1. Session ID'yi ve PDF Adını Çekme (YENİ EKLENEN KISIM)\n// Session ID: n8n'in bu çalıştırma için benzersiz ID'sini kullanır.\nconst sessionId = $execution.id; \n// PDF Adı: Webhook'tan gelen binary dosyadan çekilir.\nconst pdfFileName = $item(0).$node[\"Webhook\"].binary.pdfFile.fileName || 'No PDF Uploaded';\n\n\n// Önce AI'nin verdiği correct_answers'a bakalım\nlet correctAnswers = $json.correct_answers || null;\n\n// Eğer AI bu adımda correct_answers göndermediyse,\n// Webhook'tan gelen correct_answers'ı kullanmaya çalış\nif (!correctAnswers) {\n    const rawFromWebhook = $item(0).$node[\"Webhook\"].json.body.correct_answers;\n\n    if (rawFromWebhook) {\n        try {\n            correctAnswers = JSON.parse(rawFromWebhook);\n        } catch (e) {\n            // JSON parse hatası olursa loglamak istersen:\n        }\n    }\n}\n\n// Hâlâ correctAnswers yoksa, puanlayamayız\nif (!correctAnswers) {\n    return {\n        reply: \"Doğru cevaplara ulaşılamadı. Lütfen quiz'i tekrar oluşturup yeniden deneyin.\",\n        save_score: false,\n        score: 0,\n        answers: userAnswers,\n        correct_answers: null,\n        session_id: sessionId,   // Yeni: Hata durumunda bile ID'yi taşıyalım\n        pdf_name: pdfFileName,   // Yeni: Hata durumunda bile PDF adını taşıyalım\n    };\n}\n\n// Buradan sonrası: klasik puan hesaplama\nlet score = 0;\nlet text = \"\";\n\nfor (let i = 1; i <= 5; i++) {\n    const user = (userAnswers?.[i] || \"\").toLowerCase();\n    const correct = (correctAnswers?.[i] || \"\").toLowerCase();\n\n    if (user === correct) {\n        score += 20;\n        text += `${i}. Soru: ✔ Doğru (${correct.toUpperCase()})\\n`;\n    } else {\n        const userDisplay = user === '' ? 'NULL' : user.toUpperCase();\n        text += `${i}. Soru: ✘ Yanlış (Sen: ${userDisplay}, Doğru: ${correct.toUpperCase()})\\n`;\n    }\n}\n\n// SONUÇ RETURN (GÜNCELLENMİŞ KISIM)\nreturn {\n    reply: text + `\\nToplam Puan: ${score}`,\n    save_score: true, // DEĞİŞİKLİK 1: Kayıt akışını (Should Save?) tetiklemek için TRUE\n    score,\n    answers: userAnswers,\n    correct_answers: correctAnswers,\n    session_id: sessionId,   // DEĞİŞİKLİK 2: Benzersiz Oturum ID'si\n    pdf_name: pdfFileName,   // DEĞİŞİKLİK 3: Kaydedilecek PDF Adı\n    // DEĞİŞİKLİK 4: \"username\" alanı tamamen kaldırıldı.\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        352
+      ],
+      "id": "b8ecb3f6-fda4-432b-a2dc-fddaeb5bfc37",
+      "name": "Evaluate Quiz (CODE NODE)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a24581c6-724c-4819-9bb8-5ab72a099e8a",
+              "leftValue": "={{ Object.keys($json.answers || {}).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        448
+      ],
+      "id": "76be2fd8-c907-4811-8066-3949e2275d7f",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1EIwz_FFkR4pjrp4BbnXbESByMZaCGYSTJcoTnCCLkjo",
+          "mode": "list",
+          "cachedResultName": "final-ai",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EIwz_FFkR4pjrp4BbnXbESByMZaCGYSTJcoTnCCLkjo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sayfa1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EIwz_FFkR4pjrp4BbnXbESByMZaCGYSTJcoTnCCLkjo/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.session_id }}",
+            "puan": "={{ $json.score }}",
+            "pdf": "={{ $json.pdf_name }}",
+            "tarih": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pdf",
+              "displayName": "pdf",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "puan",
+              "displayName": "puan",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tarih",
+              "displayName": "tarih",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1984,
+        112
+      ],
+      "id": "6a9e86fa-9569-47e5-8355-99e4aa1b02c8",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Zl5POqRRJovTuUl6",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "77a6d2b6-0cb1-4b79-9e2a-376685e553f5",
+              "name": "sessionId",
+              "value": "={{ $execution.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -288,
+        16
+      ],
+      "id": "b26304be-9537-490f-8275-1393c44177f8",
+      "name": "Set Session ID"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set Session ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has PDF?": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Empty PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF": {
+      "main": [
+        [
+          {
+            "node": "Set PDF Text With File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set PDF Text With File": {
+      "main": [
+        [
+          {
+            "node": "Merge Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Empty PDF": {
+      "main": [
+        [
+          {
+            "node": "Merge Inputs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Inputs": {
+      "main": [
+        [
+          {
+            "node": "PDF AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "PDF AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse AI JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI JSON": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Save?": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Save Request?": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has PDF?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Quiz (CODE NODE)": {
+      "main": [
+        [
+          {
+            "node": "Should Save?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Quiz (CODE NODE)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        []
+      ]
+    },
+    "Set Session ID": {
+      "main": [
+        [
+          {
+            "node": "Is Save Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "069bdcd6-c3e7-4197-82b0-a65c70491f17",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9f5491dc2c6d73ace1abb52aa062b4d0de6ec2c5f0b4a24d0ad8cfada05509ac"
+  },
+  "id": "V73ThFsCAh0z8w3Z",
+  "tags": []
+}
